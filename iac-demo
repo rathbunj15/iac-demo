@@ -1,0 +1,168 @@
+#!/bin/bash
+
+# Copyright (©) 2025 rathbunj15 <rathbunj15@gmail.com>
+#
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program. If not, see <https://www.gnu.org/licenses/>.
+
+function help {
+    local exit_code=${1:-0}
+
+    echo """Usage: $(basename "$0") [OPTIONS]
+
+Optional Arguments:
+    -h, --help       Show this help message and exit
+    -c, --create     Bootstrap (create) the AWS environment
+    -t, --teardown   Teardown (delete) the AWS environment
+    -b, --build      Build the AWS DevKit Docker image
+    -r, --run        Run the AWS DevKit Docker container
+"""
+
+    echo "Exiting with code $exit_code"
+    exit $exit_code
+}
+
+function create_aws_env() {
+    echo "Creating AWS Environment..."
+    if [[ $2 ]]; then
+        echo "[INFO] Extra AWS CLI args '$2' detected."
+        docker run -it --entrypoint='$2 && bash' aws-devkit 
+    else
+        echo "[INFO] No extra AWS CLI args detected, running default command."
+        docker run -it aws-devkit
+    fi
+}
+
+function teardown() {
+    echo "Tearing down AWS environment..."
+    # Add your teardown logic here
+}
+
+function build_devkit() {
+    echo "Building AWS DevKit Docker image..."
+
+    docker build -t aws-devkit:latest --force-rm -f devkit/Dockerfile .
+    build_exit_code=$?
+
+    if [[ $? -ne 0 ]]; then
+        echo "Error building DevKit image: $build_exit_code"
+        exit 1
+    fi
+}
+
+function run_devkit() {
+    # If the image isn't already built, build it.
+    if [[ ! $(docker images -q aws-devkit:latest) ]]; then
+        echo "DevKit image not found. Building now..."
+        build_devkit
+    fi
+
+    # If the user already authenticated (meaning the .aws dir exists), then 
+    # add the mount to skip the login step.
+    auth_mount="-v `pwd`/.aws/:/root/.aws"
+
+    # If the dev mode flag was set, change the file mounts.
+    dev_mode_args=""
+    if [[ $1 == true ]]; then
+        echo "[INFO] '-d' flag detected. Development mode enabled."
+        dev_mode_args="-v `realpath $(dirname $0)`/devkit/entrypoint.sh:/opt/entrypoint.sh -v `pwd`:/iac-demo --entrypoint=/opt/entrypoint.sh"
+    fi
+
+    # Pass any extra arguments to the container.
+    container_args=""
+    if [[ $2 == true ]]; then
+        echo "[INFO] Running DevKit with extra arguments: $2"
+        container_args=$2
+    fi
+
+    echo "Running AWS DevKit Docker container..."
+
+    echo "docker run -it $dev_mode_args $auth_mount aws-devkit $container_args"
+    docker run --name aws-devkit -it --rm $dev_mode_args $auth_mount aws-devkit $container_args
+}
+
+function parse_args() {
+    operation=""
+    container_args=false
+    aws_args=false
+    dev_mode=false
+
+    while [[ $# -gt 0 ]]; do
+        case $1 in
+            -h|--help)
+                operation=help
+                ;;
+            
+            -c|--create)
+                operation=create_aws_env
+                shift
+                
+                # Pull any extra arguments for the container and save them off.
+                extra_args="${1#*=}"
+                if [[ $extra_args ]]; then
+                    aws_args=$extra_args
+                fi
+
+                ;;
+
+            -t|--teardown)
+                operation=teardown_aws_env
+                ;;
+            
+            -b|--build)
+                operation=build_devkit
+                ;;
+
+            -r|--run)
+                operation=run_devkit
+                shift
+
+                # Pull any extra arguments for the container and save them off.
+                extra_args="${1#*=}"
+                if [[ $extra_args ]]; then
+                    container_args=$extra_args
+                fi
+                
+                ;;
+
+            -d|--dev)
+                dev_mode=true
+                ;;
+
+            -*)
+                echo """Error: $1 is not a valid argument.
+                """ >&2
+                help 1
+                ;;
+
+            *)
+                help 1
+                ;;
+        esac
+
+        shift
+    done
+
+    if [[ $operation == "create_aws_env" ]]; then
+        $operation $aws_args
+        exit $?
+    elif [[ $operation == "run_devkit" ]]; then
+        $operation $dev_mode $container_args
+        exit $?
+    else
+        $operation
+        exit $?
+    fi
+}
+
+parse_args "$@"

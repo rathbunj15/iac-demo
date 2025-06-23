@@ -16,9 +16,24 @@
 # along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 login_to_aws() {
+
+    # If 'exit' was entered, exit the container.
+    check_for_exit() {
+        if [[ $1 == "exit" ]]; then
+            exit 0
+        fi
+    }
+
     echo "AWS credentials not found or expired. Please enter your AWS credentials:"
     read -p "AWS Access Key ID: " aws_access_key_id
+
+    check_for_exit $aws_access_key_id
+
     read -sp "AWS Secret Access Key aws_secret_access_key: " aws_secret_access_key
+
+    # If 'exit' was entered, exit the container.
+    check_for_exit $aws_secret_access_key
+
     echo
 
     read -p "Default Region Name [us-east-1]: " aws_region

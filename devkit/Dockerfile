@@ -19,33 +19,24 @@ LABEL maintainer=rathbunj15
 
 USER root
 
-WORKDIR /root
+WORKDIR /iac-demo
 
-COPY entrypoint.sh entrypoint.sh
+COPY devkit/entrypoint.sh entrypoint.sh
 
 # Make the entrypoint executable, then install the AWS CLI, Terraform, Anisble, 
 # and Helm.
 RUN chmod +x entrypoint.sh \
     && yum update \
-    && yum install -y \
-        apt-transport-https \
-        curl \
-        gpg \
-        unzip \
-    && curl https://apt.releases.hashicorp.com/gpg \ 
-        | gpg --dearmor -o /usr/share/keyrings/hashicorp-archive-keyring.gpg \
-    && echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/hashicorp-archive-keyring.gpg] https://apt.releases.hashicorp.com $(grep -oP '(?<=UBUNTU_CODENAME=).*' /etc/os-release || lsb_release -cs) main" \
-        | tee /etc/apt/sources.list.d/hashicorp.list \
-    && curl https://baltocdn.com/helm/signing.asc | gpg --dearmor \
-        | tee /usr/share/keyrings/helm.gpg > /dev/null \
-    && echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/helm.gpg] https://baltocdn.com/helm/stable/debian/ all main" \ 
-        | tee /etc/apt/sources.list.d/helm-stable-debian.list \
-    && yum update \
-    && yum install -y \
-        ansible \
+    && yum -y install \
+        yum-utils \
+        shadow-utils \
+    && yum-config-manager --add-repo \
+        https://rpm.releases.hashicorp.com/AmazonLinux/hashicorp.repo \
+    && yum -y install \
+        terraform \
         helm \
-        terraform \ 
-    && yum clean
+        ansible \
+    && yum clean all
 
 ENTRYPOINT ["./entrypoint.sh"]
 
