@@ -1,2 +1,5 @@
 .aws/
 *creds*
+**/.terraform/*
+*.tfstate*
+*.lock*

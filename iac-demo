@@ -87,7 +87,6 @@ function run_devkit() {
 
     echo "Running AWS DevKit Docker container..."
 
-    echo "docker run -it $dev_mode_args $auth_mount aws-devkit $container_args"
     docker run --name aws-devkit -it --rm $dev_mode_args $auth_mount aws-devkit $container_args
 }
 
